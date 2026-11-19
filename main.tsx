@@ -109,7 +109,7 @@ function App(){
     window.scrollTo(0,0)
   }
   function open(next:Dialog,initial=''){
-    setInput(initial);setStage(0);setOffer(0);setDialog(next)
+    setInput(initial);setStage(next.kind==='find'&&!next.item.id.endsWith('-3')?3:0);setOffer(0);setDialog(next)
   }
   if(!game)return <div className="splash"><Box size={64}/><h1>MYSTERY<span>BOX</span></h1><small>Storage Empire</small><progress max={3} value={status.startsWith('Вос')?1:status.startsWith('Заг')?2:3}/><p>{failed?'Не удалось открыть локальное сохранение':status}</p>{failed&&<button className="primary" onClick={boot}>Повторить</button>}</div>
 
@@ -128,6 +128,9 @@ function App(){
     return b.acquired-a.acquired
   })
   const marketEvent=E.events[game.batch%E.events.length]
+  const collection=[...new Map(game.garage.filter(i=>i.category==='Коллекции'&&!game.listings.some(l=>l.item===i.id)).map(i=>[i.name,i])).values()]
+  const collectionBonus=marketEvent===E.events[5]?1.27:1.14
+  const setPrice=collection.reduce((total,i)=>total+Math.round(E.value(game,i)*collectionBonus),0)
   const rescue=money<2300&&!game.rescue&&!game.garage.length&&!reserved&&!won.some(l=>l.opened.length<l.items.length)
   const tasks=[
     ['daily-'+game.day.key,'Купить склад сегодня',game.day.bought,1,1500],
@@ -266,6 +269,7 @@ function App(){
       {lot.opened.length===lot.items.length&&<button className="primary" onClick={()=>go(3)}>Перейти в гараж</button>}
     </>)}
     {page>=3&&page<=5&&<>{title(pages[page][0],page===3?'Занято '+room+' из '+game.capacity+' единиц хранения':page===4?'Запчасти: '+game.parts+' · Инструменты: уровень '+game.tools:'Рынок · '+marketEvent+' · Комиссия площадки '+Math.round(E.fee(game)*100)+'%')}
+      {page===5&&game.rep>=3&&collection.length>=2&&<section className="panel"><h2>Коллекционный набор</h2><p className="muted">{collection.map(i=>i.name).join(' · ')}</p><button className="primary" onClick={()=>{update(g=>{for(const i of collection){const item=g.garage.find(x=>x.id===i.id);if(item&&!g.listings.some(l=>l.item===i.id))E.sale(g,item,Math.round(E.value(g,item)*collectionBonus))}});sound(game.volume,3)}}>Продать набор · {E.rub(setPrice)}</button></section>}
       {page===4&&<button className="back" onClick={()=>go(6)}>Купить инструменты и детали</button>}
       <div className="sortbar"><label>Категория <select value={category} onChange={e=>setCategory(e.target.value)}><option value="">Все предметы</option>{[...new Set(game.garage.map(i=>i.category))].map(c=><option key={c}>{c}</option>)}</select></label>
       <label>Сортировка <select value={sort} onChange={e=>setSort(e.target.value)}><option value="date">Сначала новые</option><option value="price">По стоимости</option><option value="condition">По состоянию</option><option value="rarity">По редкости</option></select></label></div>
@@ -288,7 +292,8 @@ function App(){
     </main><footer><CircleHelp size={15}/> Виртуальные деньги · Торги против ботов <span>{saveState}</span></footer></div>
     <dialog ref={modal} aria-labelledby="modal-title" onClose={()=>setDialog(null)}>
       {dialog&&<><button className="close" aria-label="Закрыть" onClick={()=>setDialog(null)}><X size={19}/></button>
-      {dialog.kind==='find'&&<div className={'discovery rarity-'+dialog.item.rarity}><PackageOpen size={52}/><p className="eyebrow">НАЙДЕН ПРЕДМЕТ</p><h2 id="modal-title">{dialog.item.name}</h2><span className="tag rarity">{E.rarities[dialog.item.rarity]}</span><p className="muted">{dialog.item.spec}</p><p>Состояние {dialog.item.condition}% · {dialog.item.size} ед.</p><strong>{E.rub(E.value(game,dialog.item))}</strong>
+      {dialog.kind==='find'&&stage<3&&<><h2 id="modal-title">Запертый чемодан</h2><p>Возле замка три отметки. Нажмите кнопки в порядке <b>{(dialog.lot%3)+1} → {(dialog.lot+1)%3+1} → {(dialog.lot+2)%3+1}</b>.</p><progress max={3} value={stage}/><div className="actions">{[1,2,3].map(n=><button key={n} onClick={()=>{setStage(n===(dialog.lot+stage)%3+1?stage+1:0);sound(game.volume,2)}}>{n}</button>)}</div></>}
+      {dialog.kind==='find'&&stage>=3&&<div className={'discovery rarity-'+dialog.item.rarity}><PackageOpen size={52}/><p className="eyebrow">НАЙДЕН ПРЕДМЕТ</p><h2 id="modal-title">{dialog.item.name}</h2><span className="tag rarity">{E.rarities[dialog.item.rarity]}</span><p className="muted">{dialog.item.spec}</p><p>Состояние {dialog.item.condition}% · {dialog.item.size} ед.</p><strong>{E.rub(E.value(game,dialog.item))}</strong>
         <div className="actions"><button className="primary" disabled={room+dialog.item.size>game.capacity} onClick={()=>finishFind(dialog.item,dialog.lot,false)}>Забрать в гараж</button><button onClick={()=>finishFind(dialog.item,dialog.lot,true)}>Продать за {E.rub(Math.round(E.value(game,dialog.item)*.63))}</button></div>
         {room+dialog.item.size>game.capacity&&<p className="warn">В гараже не хватает места. Находку можно оставить в складе.</p>}</div>}
       {dialog.kind==='repair'&&selected&&<><h2 id="modal-title">Ремонт</h2><p>{selected.name} · {E.rub(repairCost(selected))}</p><p className="muted">Выполните операции в правильном порядке.</p><progress max={repairSteps[selected.category].length} value={stage}/>
